@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Nina's Kitty Quest</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Layout: 1-bit handheld-console screen — battle scene (kitten vs yarn ball), daily quests, big quests, weigh-in panel, paw-print map. Pure black and white by design. */
+:root{
+  --ink:#0b0b0b; --paper:#ffffff; --grey:#9a9a9a; --soft:#e9e9e9;
+  --f-pixel:"Press Start 2P", ui-monospace, "Courier New", monospace;
+  --f-text:"VT323", ui-monospace, "Courier New", monospace;
+  --px:5px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-text);font-size:21px;line-height:1.15;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 56px;
+  background-image:radial-gradient(var(--grey) 1px,transparent 1.2px);background-size:8px 8px}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px dashed var(--ink);outline-offset:3px}
+canvas.sprite{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+
+.win{background:var(--paper);border:3px solid var(--ink);border-radius:4px;box-shadow:6px 6px 0 var(--ink);padding:14px 16px}
+.win h2{font-family:var(--f-pixel);font-size:12px;margin:0 0 12px;line-height:1.5;display:flex;align-items:center;gap:10px}
+.win h2 small{font-family:var(--f-text);font-size:18px;color:var(--grey);margin-left:auto}
+
+/* ===== scene ===== */
+.scene{position:relative;height:290px;border:3px solid var(--ink);border-radius:4px;box-shadow:6px 6px 0 var(--ink);overflow:hidden;background:var(--paper)}
+.scene .sky{position:absolute;inset:0 0 52px;background-image:radial-gradient(var(--ink) 1px,transparent 1.3px);background-size:6px 6px;
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent 75%);mask-image:linear-gradient(180deg,#000,transparent 75%);opacity:.55}
+.scene .moon{position:absolute;top:22px;left:44%;width:36px;height:36px;border-radius:50%;background:var(--paper);border:3px solid var(--ink);box-shadow:inset 8px -2px 0 var(--soft)}
+.scene .floor{position:absolute;left:0;right:0;bottom:0;height:52px;border-top:3px solid var(--ink);
+  background:repeating-conic-gradient(var(--ink) 0 25%,var(--paper) 0 50%) 0 0/8px 8px}
+.scene .rug{position:absolute;left:0;right:0;bottom:16px;height:10px;background:var(--paper);border-block:3px solid var(--ink)}
+.hero,.foe{position:absolute;bottom:46px;display:flex;align-items:flex-end;gap:calc(2 * var(--px));z-index:2}
+.hero{left:10%} .foe{right:8%}
+.bob{animation:bob 1s steps(2) infinite}
+.foe .bob{animation:roll 1.4s steps(2) infinite}
+@keyframes bob{50%{transform:translateY(-4px)}}
+@keyframes roll{50%{transform:translateY(-3px) rotate(-4deg)}}
+.foe.hit{animation:hit .5s steps(2) 1}
+@keyframes hit{0%,100%{transform:none;filter:none}25%{transform:translateX(8px);filter:invert(1)}75%{transform:translateX(-6px);filter:invert(1)}}
+.foe.dead{opacity:.25}
+.dmg{position:absolute;right:20%;bottom:180px;z-index:4;font-family:var(--f-pixel);font-size:16px;background:var(--paper);border:3px solid var(--ink);padding:6px 8px;opacity:0;pointer-events:none}
+.dmg.go{animation:dmg 1.3s ease-out 1}
+@keyframes dmg{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-46px)}}
+.plate{position:absolute;top:10px;z-index:3;background:var(--paper);border:3px solid var(--ink);border-radius:4px;padding:8px 10px;min-width:220px}
+.plate.l{left:10px}.plate.r{right:10px}
+.plate .nm{font-family:var(--f-pixel);font-size:10px;display:flex;justify-content:space-between;gap:10px;line-height:1.5}
+.bar{height:12px;margin-top:6px;border:3px solid var(--ink);background:var(--paper);position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--ink);transition:width .6s steps(12)}
+.bar.hp i{background:repeating-linear-gradient(45deg,var(--ink) 0 3px,var(--paper) 3px 5px)}
+.plate small{display:block;font-size:17px;color:#555;margin-top:4px;font-variant-numeric:tabular-nums}
+
+.dialog{display:flex;gap:14px;align-items:center;min-height:86px}
+.dialog .face{flex:none;border:3px solid var(--ink);padding:4px}
+.dialog p{margin:0;font-size:23px;flex:1;min-width:0}
+.cursor{animation:blink .8s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.mute{font-family:var(--f-pixel);font-size:9px;border:3px solid var(--ink);border-radius:4px;padding:7px 8px;white-space:nowrap}
+
+.statrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.stat{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.stat b{font-family:var(--f-pixel);font-size:16px;display:block;font-variant-numeric:tabular-nums}
+.stat span{font-size:17px;color:#555}
+
+.daynav{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.arrows{display:flex;align-items:center;gap:10px}
+.arrow{font-family:var(--f-pixel);font-size:13px;width:42px;height:42px;border:3px solid var(--ink);border-radius:4px;background:var(--paper);box-shadow:3px 3px 0 var(--ink)}
+.arrow:active{transform:translate(3px,3px);box-shadow:none}
+.arrow:disabled{opacity:.3;cursor:default}
+.dayname{font-family:var(--f-pixel);font-size:13px;min-width:200px;text-align:center}
+.qcount{font-size:21px}
+
+.cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.q{display:flex;flex-direction:column;gap:10px;min-width:0;position:relative}
+.q.done{background:var(--ink);color:var(--paper)}
+.qhead{display:flex;gap:12px;align-items:center}
+.ico{flex:none;width:54px;height:54px;display:grid;place-items:center;background:var(--paper);border:3px solid var(--ink);border-radius:3px}
+.q.done .ico{border-color:var(--paper)}
+.qhead h3{margin:0;font-family:var(--f-pixel);font-size:10px;line-height:1.6}
+.qhead p{margin:2px 0 0;font-size:18px;color:#555}
+.q.done .qhead p,.q.done .sub{color:#cfcfcf}
+.reward{font-family:var(--f-pixel);font-size:9px;line-height:1.4}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}
+.cmd{font-family:var(--f-pixel);font-size:10px;padding:10px 12px;border:3px solid var(--ink);border-radius:4px;background:var(--paper);color:var(--ink);text-transform:uppercase;box-shadow:3px 3px 0 var(--ink)}
+.cmd:active{transform:translate(3px,3px);box-shadow:none}
+.q.done .cmd{border-color:var(--paper);box-shadow:3px 3px 0 var(--paper)}
+.cmd.on{background:var(--paper)}
+.cmd.wide{flex:1}
+.step{width:42px;height:42px;font-family:var(--f-pixel);font-size:14px;border:3px solid var(--ink);border-radius:4px;background:var(--paper);color:var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.step:active{transform:translate(3px,3px);box-shadow:none}
+.count{font-family:var(--f-pixel);font-size:15px;min-width:60px;text-align:center;font-variant-numeric:tabular-nums}
+.sub{font-size:18px;color:#555;font-variant-numeric:tabular-nums}
+
+.big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.big .q.done{background:var(--paper);color:var(--ink)}
+.track{display:flex;gap:6px;flex-wrap:wrap}
+.track span{width:26px;height:26px;border:3px solid var(--ink);display:grid;place-items:center}
+.track span.on{background:var(--ink)}
+.track span.on canvas{filter:invert(1)}
+.routine textarea{width:100%;min-height:130px;font-family:var(--f-text);font-size:20px;line-height:1.2;padding:10px;border:3px solid var(--ink);border-radius:4px;background:var(--paper);color:var(--ink);resize:vertical}
+.routine .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.badge{font-family:var(--f-pixel);font-size:9px;padding:6px 8px;border:3px solid var(--ink);background:var(--ink);color:var(--paper)}
+
+.lower{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+.attack{display:flex;flex-direction:column;gap:12px}
+.bnums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.bnums div{font-size:17px;color:#555}
+.bnums b{display:block;font-family:var(--f-pixel);font-size:12px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.chart{width:100%;height:auto;display:block;border:3px solid var(--ink);background:var(--paper)}
+.chart text{fill:var(--ink);font-family:var(--f-text);font-size:15px}
+.field{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.field label{display:flex;flex-direction:column;gap:3px;font-size:17px;color:#555}
+.field input{font-family:var(--f-pixel);font-size:11px;padding:9px 8px;border:3px solid var(--ink);border-radius:4px;background:var(--paper);color:var(--ink);width:120px;min-width:0}
+.cmd.atk{background:var(--ink);color:var(--paper)}
+details summary{cursor:pointer;font-size:18px;color:#555}
+.grid28{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cell{aspect-ratio:1;max-width:100%;border:3px solid var(--ink);border-radius:3px;background:var(--paper);font-family:var(--f-pixel);font-size:8px;display:grid;place-items:center;position:relative}
+.cell.l1{background:repeating-conic-gradient(var(--ink) 0 25%,var(--paper) 0 50%) 0 0/6px 6px}
+.cell.l1 span,.cell.l2 span{background:var(--paper);padding:1px 2px}
+.cell.l2{background:repeating-linear-gradient(45deg,var(--ink) 0 3px,var(--paper) 3px 6px)}
+.cell.l3{background:var(--ink);color:var(--paper)}
+.cell.sel{outline:3px solid var(--ink);outline-offset:2px}
+.legend{display:flex;gap:6px;align-items:center;font-size:17px;color:#555;margin-top:10px}
+.legend .cell{width:18px;height:18px;aspect-ratio:auto}
+.rules{margin:10px 0 0;padding:0;list-style:none;font-size:18px;display:flex;flex-direction:column;gap:4px}
+.rules li::before{content:"• "}
+.sync{font-size:17px;color:#555;text-align:center}
+
+.flash{position:fixed;inset:0;background:var(--ink);opacity:0;pointer-events:none;z-index:30}
+.flash.go{animation:fl .5s steps(2) 1}
+@keyframes fl{0%,60%{opacity:.85}100%{opacity:0}}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:20;
+  font-family:var(--f-pixel);font-size:12px;background:var(--paper);border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);
+  border-radius:4px;padding:12px 16px;opacity:0;transition:opacity .15s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+
+@media (max-width:900px){ .cols{grid-template-columns:repeat(2,minmax(0,1fr))} .big{grid-template-columns:1fr} .lower{grid-template-columns:1fr} .statrow{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:600px){
+  :root{--px:3px}
+  .scene{height:270px}
+  .plate{min-width:0;width:calc(50% - 15px);padding:6px 8px}
+  .plate .nm{font-size:8px;flex-direction:column;gap:2px}
+  .hero{left:4%} .foe{right:4%}
+  .scene .moon{display:none}
+  .cols{grid-template-columns:1fr}
+  .bnums{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dayname{min-width:0;font-size:11px}
+  .dialog p{font-size:20px}
+  .dialog .face{display:none}
+}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+
+<div class="wrap">
+  <section class="scene" aria-label="Battle scene: Nina the kitten versus the Giant Yarn Ball">
+    <div class="sky"></div><div class="moon"></div>
+    <div class="floor"></div><div class="rug"></div>
+    <div class="plate l">
+      <div class="nm"><span>NINA</span><span id="lvl">LV 1</span></div>
+      <div class="bar"><i id="expFill" style="width:0"></i></div>
+      <small id="expTxt">EXP 0/300 · Kitten</small>
+    </div>
+    <div class="plate r">
+      <div class="nm"><span>YARN BALL</span><span id="hpKg">?? KG</span></div>
+      <div class="bar hp"><i id="hpFill" style="width:100%"></i></div>
+      <small id="hpTxt">HP ??? · set start weight</small>
+    </div>
+    <div class="hero"><div class="bob"><canvas class="sprite" id="spKitty"></canvas></div><canvas class="sprite" id="spMouse"></canvas></div>
+    <div class="foe" id="foe"><div class="bob"><canvas class="sprite" id="spYarn"></canvas></div></div>
+    <div class="dmg" id="dmg"></div>
+  </section>
+
+  <section class="win dialog">
+    <div class="face"><canvas class="sprite" id="spFace"></canvas></div>
+    <p id="say">Mrrp! A Giant Yarn Ball blocks the way.<span class="cursor">▼</span></p>
+    <button class="mute" id="mute">SOUND: ON</button>
+  </section>
+
+  <section class="statrow">
+    <div class="win stat"><canvas class="sprite" id="icFish"></canvas><div><b id="sTotal">0</b><span>Total EXP</span></div></div>
+    <div class="win stat"><canvas class="sprite" id="icHeart"></canvas><div><b id="sToday">0</b><span>EXP today</span></div></div>
+    <div class="win stat"><canvas class="sprite" id="icPaw"></canvas><div><b id="sStreak">0</b><span>Day streak</span></div></div>
+    <div class="win stat"><canvas class="sprite" id="icCrown"></canvas><div><b id="sBest">0</b><span>Best streak</span></div></div>
+  </section>
+
+  <div class="daynav">
+    <div class="arrows">
+      <button class="arrow" id="prev" aria-label="Previous day">◀</button>
+      <span class="dayname" id="dayLabel">TODAY</span>
+      <button class="arrow" id="next" aria-label="Next day">▶</button>
+    </div>
+    <div class="qcount" id="doneTxt">DAILY 0/4</div>
+  </div>
+
+  <section class="cols" id="daily" aria-label="Daily quests"></section>
+
+  <section class="win routine" id="routineWin">
+    <h2><canvas class="sprite" id="icRoutine"></canvas>Quest: Build my workout routine <small id="routineState">+100 EXP</small></h2>
+    <label for="routine" class="sub">Write your plan: which days, which moves, how long.</label>
+    <textarea id="routine" placeholder="Mon · 20 min walk + 3×10 squats&#10;Wed · beginner pilates video&#10;Fri · 20 min walk + 3×10 lunges"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="cmd" id="lockRoutine">Lock it in</button>
+      <span class="sub" id="routineHint">Lock it in once it feels right. You can still edit it later.</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="daynav" style="margin-bottom:12px"><span class="dayname" style="text-align:left;min-width:0">BIG QUESTS</span><span class="sub">Tap + whenever you finish one</span></div>
+    <div class="big" id="big"></div>
+  </section>
+
+  <section class="lower">
+    <div class="win attack">
+      <h2>Unravel the yarn ball</h2>
+      <div class="bnums">
+        <div>Start<b id="bStart">–</b></div>
+        <div>Now<b id="bNow">–</b></div>
+        <div>Unravelled<b id="bLost">–</b></div>
+        <div>Pace needed<b id="bPace">–</b></div>
+      </div>
+      <svg class="chart" id="chart" viewBox="0 0 520 170" role="img" aria-label="Weight over time against the goal"></svg>
+      <div class="field">
+        <label for="wIn">Weigh-in (kg)<input id="wIn" type="number" step="0.1" min="30" max="250" inputmode="decimal" placeholder="68.0"></label>
+        <button class="cmd atk" id="wLog">Pounce! +10 EXP</button>
+      </div>
+      <span class="sub" id="bossDeadline"></span>
+      <details>
+        <summary>Yarn ball settings</summary>
+        <div class="field" style="margin-top:10px">
+          <label for="sStart">Start kg<input id="sStart" type="number" step="0.1" inputmode="decimal"></label>
+          <label for="sGoal">Lose kg<input id="sGoal" type="number" step="0.5" value="10"></label>
+          <label for="sDead">Deadline<input id="sDead" type="date" style="width:170px"></label>
+          <button class="cmd" id="sSave">Save</button>
+        </div>
+      </details>
+    </div>
+    <div class="win">
+      <h2>Paw-print map</h2>
+      <div class="grid28" id="grid28"></div>
+      <div class="legend">0 <span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span> 4/4</div>
+      <ul class="rules">
+        <li>Tap a day to fill it in later.</li>
+        <li>3 of 4 daily quests keeps the streak.</li>
+        <li>All 4 = +25 EXP bonus.</li>
+        <li>300 EXP per level.</li>
+      </ul>
+    </div>
+  </section>
+  <div class="sync" id="sync">Saved on this device</div>
+</div>
+<div class="flash" id="flash"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+// ================= 1-BIT SPRITES =================
+const PAL={k:"#0b0b0b",w:"#ffffff",h:"#9a9a9a"};
+const SPR={
+kitty:[
+".kk........kk...",
+"kwhk......khwk..",
+"kwwhk....khwwk..",
+"kkkkkkkkkkkkkk..",
+"kkkkkkkkkkkkkk..",
+"kkwwwkkkkwwwkk..",
+"kkwkwkkkkwkwkk..",
+"kkwwwkkkkwwwkk..",
+"kkkkkwwwwkkkkk..",
+"kkkkwwwkwwwkkk..",
+"kkkwwwkkkwwwkk..",
+".kkkwwwwwwwkk...",
+"..kkkkwwkkkk....",
+"..kkkwwwwkkk....",
+".kkkwwwwwwkkk...",
+".kkkwwwwwwkkk.kk",
+".kkkwwwwwwkkk..k",
+".kkkkwwwwkkkk..k",
+".kkkkkkkkkkkkkk.",
+".kwwwk..kwwwk...",
+".kkkkk..kkkkk..."],
+face:[
+".kk......kk.",
+"kwhk....khwk",
+"kkkkkkkkkkkk",
+"kwwwkkkkwwwk",
+"kwkwkkkkwkwk",
+"kkkkkwwkkkkk",
+"kkkwwkkwwkkk",
+".kkkwwwwkkk.",
+"..kkkkkkkk.."],
+mouse:[
+"..kk......",
+".kwwk.....",
+".kwwkkkk..",
+"kkwwwwwwk.",
+"kwkwwwwwwk",
+"kwwwwwwwwkk",
+".kkkkkkkk.k"],
+yarn:[
+"..............................",
+"...........kk.................",
+".......kkkkkkkkkk.............",
+"......kkkkkkkwwwkk............",
+".....kkwwwkkkkwwwkk...........",
+"....kkwwwwwwkkkwwwwk..........",
+"...kkkkkkwwwwkkkkwwkk.........",
+"..kkwkwwwwwwwwwwwwwwkk........",
+"..kwwwwkwwwwwwwwkwwkkk........",
+"..kwwwwkkkkwwkkkkwwkkk........",
+"..kkkwwkwwkwwkwwkwwwkk........",
+".kkkkwwkkwkwwkwkkwwwwkk.......",
+".kkwwwwkkkkwwkkkkwwwwkk.......",
+"..kwwwwwwwwwwwwwwwwkkk........",
+"..kkkwwwwwkkkkwwwwwkkk........",
+"..kkkwwwwwkwwkwwwwwwwk........",
+"..kkkwwwwwwwwwwwwwwwkk........",
+"...kkwwwwwwwwwwwwwkkk.........",
+"....kwkkkkkkwwwwkkkk.k........",
+".....kkwwwkkkwwwwkk...k.......",
+"......kkwwwkkkkwkk.....kk.....",
+".......kkkkkkkkkk........kk..k",
+"...........kk..............kk.",
+".............................."],
+dumbbell:[
+"kk........kk",
+"khk......khk",
+"khkkkkkkkkhk",
+"khwwwwwwwwhk",
+"khkkkkkkkkhk",
+"khk......khk",
+"kk........kk"],
+book:[
+".kkkkkkkkkk.",
+".kkkkkkkkkk.",
+".kkwwwwwwkk.",
+".kkkkkkkkkk.",
+".kkkhkkhkkk.",
+".kkkkkkkkkk.",
+".kwwwwwwwwk.",
+".kkkkkkkkkk."],
+berry:[
+"...k.k....",
+"..kkhkk...",
+".kkkkkkk..",
+"kwkwwwkwk.",
+"kwwwkwwwk.",
+"kwkwwwkwk.",
+".kwwkwwk..",
+".kwwwwwk..",
+"..kwkwk...",
+"...kwk....",
+"....k....."],
+pencil:[
+".kkkkkkkkkk...",
+"khhkwwwwwwwkk.",
+"khhkwwwwwwwwkk",
+"khhkwwwwwwwkk.",
+".kkkkkkkkkk..."],
+page:[
+"kkkkkkkk..",
+"kwwwwwwkk.",
+"kwkkwkkwwk",
+"kwkkkkkwwk",
+"kwwkkkwwwk",
+"kwwwkwwwwk",
+"kwkkkkkkwk",
+"kwwwwwwwwk",
+"kwkkkkkkwk",
+"kwwwwwwwwk",
+"kkkkkkkkkk"],
+coffee:[
+"...k..k.....",
+"..k..k......",
+"...k..k.....",
+"kkkkkkkkk...",
+"kwwwwwwwkkk.",
+"kwkkkkkwk.k.",
+"kwwwwwwwk.k.",
+"kwwwwwwwkkk.",
+".kwwwwwk....",
+"..kkkkk.....",
+"kkkkkkkkkk.."],
+spool:[
+"kkkkkkkkkk",
+".kwkwkwkk.",
+".kkwkwkwk.",
+".kwkwkwkk.",
+".kkwkwkwk.",
+".kwkwkwkk.",
+"kkkkkkkkkk",
+"........k.",
+".......k..",
+"......kkk."],
+fish:[
+".....kkk...k",
+"...kkwwwk.kk",
+"..kwwwwwwkwk",
+".kwkwwwwwwkk",
+"..kwwwwwwkwk",
+"...kkwwwk.kk",
+".....kkk...k"],
+heart:[
+".kk.kk.",
+"kwwkwwk",
+"kwwwwwk",
+".kwwwk.",
+"..kwk..",
+"...k..."],
+paw:[
+"..kk.kk..",
+"..kk.kk..",
+"kk.....kk",
+"kk.kkk.kk",
+"..kkkkk..",
+".kkkkkkk.",
+".kkkkkkk.",
+"..kk.kk.."],
+crown:[
+"k..k..k.",
+"kwkwkwkk",
+"kwwwwwwk",
+"kwkwwkwk",
+"kwwwwwwk",
+"kkkkkkkk"],
+tinypaw:[
+".k.k.",
+"k...k",
+".kkk.",
+".kkk."]
+};
+function draw(cv,rows,scale){
+  const w=Math.max(...rows.map(r=>r.length)), h=rows.length; cv.width=w; cv.height=h;
+  const ctx=cv.getContext("2d"); ctx.clearRect(0,0,w,h);
+  rows.forEach((r,y)=>{for(let x=0;x<r.length;x++){const c=PAL[r[x]]; if(c){ctx.fillStyle=c;ctx.fillRect(x,y,1,1)}}});
+  const sc=typeof scale==="number"?scale+"px":scale;
+  cv.style.width="calc("+w+" * "+sc+")"; cv.style.height="calc("+h+" * "+sc+")"; return cv;
+}
+const sprite=(n,s)=>draw(document.createElement("canvas"),SPR[n],s);
+const mount=(id,n,s)=>{const c=document.getElementById(id); c.classList.add("sprite"); draw(c,SPR[n],s)};
+mount("spKitty","kitty","var(--px)");
+mount("spMouse","mouse","calc(var(--px) * .7)");
+mount("spYarn","yarn","calc(var(--px) * .95)");
+mount("spFace","face",4);
+mount("icFish","fish",4); mount("icHeart","heart",5); mount("icPaw","paw",4); mount("icCrown","crown",5); mount("icRoutine","dumbbell",2);
+
+// ================= SOUND (bleeps + a tiny meow) =================
+let soundOn=true; try{soundOn=localStorage.getItem("kq-sound")!=="off"}catch(e){}
+let actx=null;
+function tone(f1,f2,d,t){const o=actx.createOscillator(),g=actx.createGain(); o.type="square";
+  o.frequency.setValueAtTime(f1,t); o.frequency.exponentialRampToValueAtTime(f2,t+d);
+  g.gain.setValueAtTime(.05,t); g.gain.exponentialRampToValueAtTime(.001,t+d); o.connect(g).connect(actx.destination); o.start(t); o.stop(t+d)}
+function play(seq){ if(!soundOn) return; try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); let t=actx.currentTime;
+  seq.forEach(([a,b,d])=>{tone(a,b,d,t); t+=d*.9}) }catch(e){} }
+const SFX={tick:[[900,900,.05]],meow:[[700,1100,.08],[1100,600,.22]],level:[[523,523,.1],[659,659,.1],[784,784,.1],[1047,1047,.25],[1200,700,.2]],hit:[[300,90,.25]],undo:[[330,300,.08]]};
+function setMute(){document.getElementById("mute").textContent="SOUND: "+(soundOn?"ON":"OFF")}
+document.getElementById("mute").onclick=()=>{soundOn=!soundOn; try{localStorage.setItem("kq-sound",soundOn?"on":"off")}catch(e){} setMute(); if(soundOn)play(SFX.meow)};
+setMute();
+
+// ================= GAME DATA =================
+const LEVEL_XP=300, BONUS=25, STREAK_MIN=3, WEIGH_XP=10, ROUTINE_XP=100;
+const RANKS=["Kitten","Curious Kitten","Mouser","Alley Cat","Night Prowler","Cat Burglar","Panther","Cat Queen"];
+const DAILY=[
+ {id:"workout",name:"Zoomies",desc:"Do today's workout",xp:30,icon:"dumbbell",say:"Zoomies complete! Stretchy and strong."},
+ {id:"study",name:"Study nap... no, study!",desc:"A study session",xp:25,icon:"book",say:"You studied! Big-brain kitty."},
+ {id:"yummy",name:"Healthy yummy",desc:"A good snack or meal",xp:15,icon:"berry",say:"Nom nom. Healthy and tasty."},
+ {id:"draw",name:"Doodle time",desc:"Draw some stuff",xp:15,icon:"pencil",say:"A new doodle for the gallery!"}
+];
+const BIG=[
+ {id:"fanfic",name:"Release a fanfic chapter",goal:2,xp:150,icon:"page",unit:"chapters",say:"Chapter released! Readers purr."},
+ {id:"coffee",name:"Go out for coffee",goal:4,xp:40,icon:"coffee",unit:"coffee trips",say:"Coffee outing! The world is cozy."},
+ {id:"sew",name:"Remake clothes",goal:3,xp:80,icon:"spool",unit:"pieces remade",say:"Snip snip, stitch stitch. A new look!"}
+];
+
+const pad=n=>String(n).padStart(2,"0");
+const keyOf=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parseKey=k=>{const[a,b,c]=k.split("-").map(Number);return new Date(a,b-1,c)};
+const addDays=(k,n)=>{const d=parseKey(k);d.setDate(d.getDate()+n);return keyOf(d)};
+const todayKey=()=>keyOf(new Date());
+const fmtDay=k=>{const t=todayKey(); if(k===t)return"TODAY"; if(k===addDays(t,-1))return"YESTERDAY";
+  return parseKey(k).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}).toUpperCase()};
+
+const DEF_PROFILE=()=>({startWeight:null,goalKg:10,deadline:"2027-03-01",weights:[],counts:{fanfic:0,coffee:0,sew:0},routine:"",routineLocked:false});
+let days={}, profile=DEF_PROFILE(), viewKey=todayKey(), coll=null;
+const pending=new Set(), timers={}, chains={};
+function normProfile(p){const d=DEF_PROFILE(); const o=Object.assign(d,p||{}); o.counts=Object.assign(DEF_PROFILE().counts,(p&&p.counts)||{}); return o}
+function lsLoad(){try{const s=JSON.parse(localStorage.getItem("kittyquest")||"null"); if(s){days=s.days||{}; profile=normProfile(s.profile)}}catch(e){}}
+function lsSave(){try{localStorage.setItem("kittyquest",JSON.stringify({days,profile}))}catch(e){}}
+const getDay=k=>Object.assign({workout:false,study:false,yummy:false,draw:false},days[k]||{});
+
+function scoreDay(k){const d=getDay(k); let xp=0,done=0; DAILY.forEach(q=>{if(d[q.id]){xp+=q.xp;done++}}); if(done===DAILY.length)xp+=BONUS; return{xp,done}}
+function totalXP(){let t=0; Object.keys(days).forEach(k=>t+=scoreDay(k).xp);
+  BIG.forEach(b=>t+=(profile.counts[b.id]||0)*b.xp); if(profile.routineLocked)t+=ROUTINE_XP; return t+(profile.weights||[]).length*WEIGH_XP}
+function streaks(){
+  let k=todayKey(); if(scoreDay(k).done<STREAK_MIN) k=addDays(k,-1);
+  let cur=0; while(scoreDay(k).done>=STREAK_MIN){cur++;k=addDays(k,-1)}
+  let best=0,run=0,prev=null; Object.keys(days).sort().forEach(x=>{if(scoreDay(x).done>=STREAK_MIN){run=(prev&&addDays(prev,1)===x)?run+1:1;prev=x;best=Math.max(best,run)}else{run=0;prev=null}});
+  return{cur,best:Math.max(best,cur)};
+}
+function bossInfo(){
+  const ws=(profile.weights||[]).slice().sort((a,b)=>a.d<b.d?-1:1), start=profile.startWeight, goal=+profile.goalKg||10;
+  const now=ws.length?ws[ws.length-1].kg:start, lost=start?Math.max(0,start-now):0, rem=Math.max(0,goal-lost);
+  const left=Math.max(0,Math.ceil((parseKey(profile.deadline)-parseKey(todayKey()))/864e5));
+  return{ws,start,goal,now,lost,rem,left};
+}
+
+// ================= SAVE =================
+const $=id=>document.getElementById(id);
+function setSync(t){$("sync").textContent=t}
+function persist(id,data){
+  lsSave(); if(!coll) return;
+  pending.add(id); setSync("Saving…"); clearTimeout(timers[id]);
+  timers[id]=setTimeout(()=>{const body=JSON.parse(JSON.stringify(data));
+    chains[id]=(chains[id]||Promise.resolve()).then(()=>coll.doc(id).set(body))
+      .then(()=>{pending.delete(id); if(!pending.size) setSync("Saved to your account · syncs across devices")})
+      .catch(()=>{pending.delete(id); setSync("Saved on this device")});
+  },500);
+}
+
+// ================= FX =================
+let tt; function toast(t){const el=$("toast"); el.textContent=t; el.classList.add("show"); clearTimeout(tt); tt=setTimeout(()=>el.classList.remove("show"),1500)}
+let typeTimer;
+function say(text,instant){
+  const p=$("say"); clearInterval(typeTimer);
+  const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(instant||reduce){p.textContent=text; p.insertAdjacentHTML("beforeend",'<span class="cursor">▼</span>'); return}
+  let i=0; p.textContent="";
+  typeTimer=setInterval(()=>{i+=2; p.textContent=text.slice(0,i); if(i>=text.length){clearInterval(typeTimer); p.insertAdjacentHTML("beforeend",'<span class="cursor">▼</span>')}},22);
+}
+function flash(){const f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go")}
+function hitYarn(txt){const f=$("foe"),d=$("dmg"); f.classList.remove("hit"); d.classList.remove("go"); void f.offsetWidth; f.classList.add("hit"); d.textContent=txt; d.classList.add("go")}
+function idleLine(){
+  const sd=scoreDay(todayKey()), b=bossInfo(), left=DAILY.length-sd.done;
+  if(b.start&&b.rem<=0) return "The Giant Yarn Ball is fully unravelled! Nina wins. Purrrr.";
+  if(sd.done===DAILY.length) return "All 4 daily quests done! Time for a well-earned cat nap.";
+  if(!b.start) return "Mrrp! A Giant Yarn Ball blocks the way. Log a weigh-in to start the battle.";
+  return left+" daily quest"+(left===1?"":"s")+" left. The yarn ball has "+b.rem.toFixed(1)+" kg left and "+b.left+" days on the clock.";
+}
+// wrap any state change: detect level-ups
+function withLevel(fn){const lb=Math.floor(totalXP()/LEVEL_XP); const r=fn(); const la=Math.floor(totalXP()/LEVEL_XP);
+  if(la>lb){flash(); play(SFX.level); toast("LEVEL UP! LV "+(la+1)); say("Nina reached LV "+(la+1)+"! New title: "+RANKS[Math.min(la,RANKS.length-1)]+"."); return true} return r}
+
+// ================= ACTIONS =================
+function toggleDaily(q){
+  const d=getDay(viewKey), turningOn=!d[q.id];
+  withLevel(()=>{ const before=scoreDay(viewKey).done;
+    days[viewKey]=Object.assign(d,{[q.id]:turningOn}); persist("d-"+viewKey,days[viewKey]);
+    const after=scoreDay(viewKey).done;
+    if(turningOn&&after===DAILY.length&&before<DAILY.length){flash(); play(SFX.level); toast("PURRFECT DAY! +"+BONUS+" EXP"); say("Purrfect day! All 4 quests done. +"+BONUS+" bonus EXP.")}
+    else if(turningOn){play(SFX.meow); toast("+"+q.xp+" EXP"); say(q.say)}
+    else play(SFX.undo);
+  });
+  render();
+}
+function stepBig(b,delta){
+  const n=Math.max(0,(profile.counts[b.id]||0)+delta); if(n===profile.counts[b.id]) return;
+  withLevel(()=>{ profile.counts[b.id]=n; persist("profile",profile);
+    if(delta>0){ if(n===b.goal){flash(); play(SFX.level); toast("QUEST COMPLETE!"); say(b.name+": goal reached! "+n+" of "+b.goal+". Anything more is bonus.")}
+      else {play(SFX.meow); toast("+"+b.xp+" EXP"); say(b.say)} }
+    else play(SFX.undo);
+  });
+  render();
+}
+
+// ================= RENDER =================
+function render(){
+  const tot=totalXP(), lvl=Math.floor(tot/LEVEL_XP)+1, into=tot%LEVEL_XP;
+  $("lvl").textContent="LV "+lvl; $("expFill").style.width=(into/LEVEL_XP*100)+"%";
+  $("expTxt").textContent="EXP "+into+"/"+LEVEL_XP+" · "+RANKS[Math.min(lvl-1,RANKS.length-1)];
+  const st=streaks(); $("sStreak").textContent=st.cur; $("sBest").textContent=st.best;
+  $("sTotal").textContent=tot.toLocaleString(); $("sToday").textContent=scoreDay(todayKey()).xp;
+  $("dayLabel").textContent=fmtDay(viewKey); $("next").disabled=viewKey>=todayKey();
+  const sd=scoreDay(viewKey); $("doneTxt").textContent="DAILY "+sd.done+"/"+DAILY.length+" · "+sd.xp+" EXP";
+  renderDaily(); renderBig(); renderRoutine(); renderBoss(); renderMap();
+}
+function renderDaily(){
+  const d=getDay(viewKey), host=$("daily"); host.innerHTML="";
+  DAILY.forEach(q=>{const on=!!d[q.id], el=document.createElement("article"); el.className="win q"+(on?" done":"");
+    el.innerHTML='<div class="qhead"><div class="ico"></div><div><h3></h3><p></p></div></div><span class="reward"></span><div class="ctrl"></div>';
+    el.querySelector(".ico").appendChild(sprite(q.icon,3)); el.querySelector("h3").textContent=q.name; el.querySelector("p").textContent=q.desc;
+    el.querySelector(".reward").textContent=on?"DONE +"+q.xp+" EXP":"+"+q.xp+" EXP";
+    const b=document.createElement("button"); b.className="cmd wide"; b.textContent=on?"✓ Done":"Did it!"; b.onclick=()=>toggleDaily(q);
+    el.querySelector(".ctrl").appendChild(b); host.appendChild(el)});
+}
+function renderBig(){
+  const host=$("big"); host.innerHTML="";
+  BIG.forEach(b=>{const n=profile.counts[b.id]||0, el=document.createElement("article"); el.className="win q"+(n>=b.goal?" done":"");
+    el.innerHTML='<div class="qhead"><div class="ico"></div><div><h3></h3><p></p></div></div><div class="track"></div><div class="ctrl"></div>';
+    el.querySelector(".ico").appendChild(sprite(b.icon,3)); el.querySelector("h3").textContent=b.name;
+    el.querySelector("p").textContent=n>=b.goal?"Goal reached! +"+b.xp+" EXP for each extra":"Goal: "+b.goal+" · +"+b.xp+" EXP each";
+    const tr=el.querySelector(".track"); for(let i=0;i<Math.max(b.goal,n);i++){const s=document.createElement("span"); if(i<n){s.className="on"; s.appendChild(sprite("tinypaw",3))} tr.appendChild(s)}
+    const c=el.querySelector(".ctrl");
+    const m=document.createElement("button"); m.className="step"; m.textContent="-"; m.setAttribute("aria-label","Remove one"); m.onclick=()=>stepBig(b,-1);
+    const cnt=document.createElement("span"); cnt.className="count"; cnt.textContent=n+"/"+b.goal;
+    const p=document.createElement("button"); p.className="step"; p.textContent="+"; p.setAttribute("aria-label","Add one"); p.onclick=()=>stepBig(b,1);
+    const sub=document.createElement("span"); sub.className="sub"; sub.textContent=b.unit;
+    c.append(m,cnt,p,sub); host.appendChild(el)});
+}
+function renderRoutine(){
+  const ta=$("routine"); if(document.activeElement!==ta) ta.value=profile.routine||"";
+  $("routineState").textContent=profile.routineLocked?"COMPLETE · +"+ROUTINE_XP+" EXP":"+"+ROUTINE_XP+" EXP";
+  $("lockRoutine").textContent=profile.routineLocked?"✓ Locked in":"Lock it in";
+  $("routineHint").textContent=profile.routineLocked?"Your routine is set. Edit any time; changes save automatically.":"Lock it in once it feels right. You can still edit it later.";
+}
+function renderBoss(){
+  const b=bossInfo(), dl=parseKey(profile.deadline);
+  $("bossDeadline").textContent=b.left+" days until "+dl.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  $("foe").classList.toggle("dead",!!b.start&&b.rem<=0);
+  if(!b.start){$("hpFill").style.width="100%"; $("hpKg").textContent="?? KG"; $("hpTxt").textContent="HP ??? · set start weight";
+    ["bStart","bNow","bLost","bPace"].forEach(i=>$(i).textContent="–"); $("chart").innerHTML='<text x="260" y="90" text-anchor="middle">Log a weigh-in to start the battle</text>'; return}
+  $("hpFill").style.width=(b.rem/b.goal*100)+"%"; $("hpKg").textContent=b.rem.toFixed(1)+" KG";
+  $("hpTxt").textContent=b.rem<=0?"UNRAVELLED!":"HP "+b.rem.toFixed(1)+"/"+b.goal+" kg";
+  $("bStart").textContent=b.start.toFixed(1); $("bNow").textContent=b.now.toFixed(1); $("bLost").textContent="-"+b.lost.toFixed(1)+"kg";
+  $("bPace").textContent=b.rem<=0?"Won!":b.left>0?(b.rem/(b.left/7)).toFixed(2)+"/wk":"–";
+  const W=520,H=170,L=36,R=12,T=14,B=24, target=b.start-b.goal;
+  const sd=profile.startDate||(b.ws[0]&&b.ws[0].d)||todayKey(), t0=parseKey(sd), span=Math.max(1,(dl-t0)/864e5);
+  const all=b.ws.map(w=>w.kg), lo=Math.floor(Math.min(target,...all)-1), hi=Math.ceil(Math.max(b.start,...all)+1);
+  const x=k=>L+Math.min(1,Math.max(0,(parseKey(k)-t0)/864e5/span))*(W-L-R), y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  let s=""; const stepY=Math.max(1,Math.round((hi-lo)/4));
+  for(let v=lo;v<=hi;v+=stepY) s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#9a9a9a" stroke-width="1" stroke-dasharray="2 4"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>';
+  s+='<line x1="'+x(sd)+'" y1="'+y(b.start)+'" x2="'+(W-R)+'" y2="'+y(target)+'" stroke="#0b0b0b" stroke-width="2" stroke-dasharray="6 6"/>';
+  s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(target)+'" y2="'+y(target)+'" stroke="#0b0b0b" stroke-width="3"/>';
+  s+='<text x="'+(W-R)+'" y="'+(y(target)-6)+'" text-anchor="end">GOAL '+target.toFixed(1)+'</text>';
+  const pts=[[sd,b.start]].concat(b.ws.filter(w=>w.d>=sd).map(w=>[w.d,w.kg]));
+  if(pts.length>1) s+='<polyline fill="none" stroke="#0b0b0b" stroke-width="3" points="'+pts.map(q=>x(q[0])+","+y(q[1])).join(" ")+'"/>';
+  pts.forEach((q,i)=>{const r=i===pts.length-1?5:3; s+='<rect x="'+(x(q[0])-r)+'" y="'+(y(q[1])-r)+'" width="'+(2*r)+'" height="'+(2*r)+'" fill="'+(i===pts.length-1?"#0b0b0b":"#ffffff")+'" stroke="#0b0b0b" stroke-width="2"/>'});
+  const fd=k=>parseKey(k).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  s+='<text x="'+L+'" y="'+(H-6)+'">'+fd(sd)+'</text><text x="'+(W-R)+'" y="'+(H-6)+'" text-anchor="end">'+fd(profile.deadline)+'</text>';
+  $("chart").innerHTML=s;
+}
+function renderMap(){
+  const host=$("grid28"); host.innerHTML=""; const t=todayKey();
+  for(let i=27;i>=0;i--){const k=addDays(t,-i), sd=scoreDay(k), b=document.createElement("button");
+    const lv=sd.done===0?"":sd.done===DAILY.length?"l3":sd.done>=STREAK_MIN?"l2":"l1";
+    b.className="cell "+lv+(k===viewKey?" sel":""); b.innerHTML="<span></span>"; b.firstChild.textContent=parseKey(k).getDate();
+    b.setAttribute("aria-label",fmtDay(k)+": "+sd.done+" of 4"); b.onclick=()=>{viewKey=k; play(SFX.tick); render()}; host.appendChild(b)}
+}
+
+// ================= CONTROLS =================
+$("prev").onclick=()=>{viewKey=addDays(viewKey,-1); play(SFX.tick); render()};
+$("next").onclick=()=>{if(viewKey<todayKey()){viewKey=addDays(viewKey,1); play(SFX.tick); render()}};
+let rt; $("routine").oninput=()=>{profile.routine=$("routine").value; clearTimeout(rt); rt=setTimeout(()=>persist("profile",profile),400)};
+$("lockRoutine").onclick=()=>{
+  if(profile.routineLocked){toast("ALREADY LOCKED IN"); return}
+  if(!$("routine").value.trim()){toast("WRITE YOUR PLAN FIRST"); $("routine").focus(); return}
+  withLevel(()=>{profile.routine=$("routine").value; profile.routineLocked=true; persist("profile",profile);
+    flash(); play(SFX.level); toast("QUEST COMPLETE! +"+ROUTINE_XP+" EXP"); say("Routine locked in! Now the Zoomies quest has a plan to follow.")});
+  render();
+};
+$("wLog").onclick=()=>{
+  const v=parseFloat($("wIn").value); if(!(v>20&&v<300)){toast("ENTER WEIGHT IN KG"); return}
+  const before=bossInfo();
+  withLevel(()=>{
+    const ws=(profile.weights||[]).filter(w=>w.d!==viewKey), isNew=ws.length===(profile.weights||[]).length;
+    ws.push({d:viewKey,kg:Math.round(v*10)/10}); profile.weights=ws;
+    if(!profile.startWeight){profile.startWeight=Math.round(v*10)/10; profile.startDate=viewKey}
+    persist("profile",profile); $("wIn").value="";
+    const after=bossInfo(), dmg=before.start?before.rem-after.rem:0;
+    if(after.rem<=0&&before.rem>0){flash(); play(SFX.level); hitYarn("DONE!"); say("The Giant Yarn Ball is fully unravelled! Nina wins!")}
+    else if(dmg>0.04){play(SFX.hit); hitYarn("-"+dmg.toFixed(1)+" KG"); say("Pounce! "+dmg.toFixed(1)+" kg of yarn unravelled. "+after.rem.toFixed(1)+" kg to go.")}
+    else if(!before.start){play(SFX.meow); say("The battle begins! The yarn ball holds "+after.goal+" kg. Pounce with every weigh-in.")}
+    else {play(SFX.undo); say(dmg<-0.04?"The yarn ball rewound "+(-dmg).toFixed(1)+" kg. Totally normal. Pounce again next time!":"No change this time. Steady paws, keep going!")}
+    toast(isNew?"+"+WEIGH_XP+" EXP":"WEIGH-IN UPDATED");
+  });
+  render();
+};
+$("sSave").onclick=()=>{
+  const sw=parseFloat($("sStart").value), g=parseFloat($("sGoal").value), dd=$("sDead").value;
+  if(sw>20){ if(!profile.startWeight) profile.startDate=todayKey(); profile.startWeight=sw }
+  if(g>0) profile.goalKg=g; if(dd) profile.deadline=dd;
+  persist("profile",profile); play(SFX.meow); toast("YARN BALL UPDATED"); render(); say(idleLine());
+};
+function fillSettings(){ $("sStart").value=profile.startWeight||""; $("sGoal").value=profile.goalKg||10; $("sDead").value=profile.deadline }
+let lastToday=todayKey();
+setInterval(()=>{const t=todayKey(); if(t!==lastToday){ if(viewKey===lastToday) viewKey=t; lastToday=t; render() }},60000);
+
+// ================= BOOT =================
+lsLoad(); fillSettings(); render(); say(idleLine(),true);
+(async()=>{
+  const use=window.claude&&window.claude.use;
+  if(!use){ setSync("Saved on this device"); return }
+  const [db,user]=await Promise.all([use("db").catch(()=>null),use("user").catch(()=>null)]);
+  const uid=user?await user.id().catch(()=>null):null;
+  if(!db||!uid){ setSync("Saved on this device"); return }
+  coll=db.collection("data/users/"+uid); setSync("Loading save file…");
+  const timer=setTimeout(()=>setSync("Can't reach your save file yet. Showing this device's copy."),10000);
+  let first=true;
+  coll.onSnapshot(snap=>{
+    if(!snap.metadata.fromCache) clearTimeout(timer);
+    if(first&&!snap.metadata.fromCache){ first=false;
+      if(snap.empty&&(Object.keys(days).length||profile.startWeight||profile.routine)){ Object.keys(days).forEach(k=>persist("d-"+k,days[k])); persist("profile",profile); return } }
+    snap.docs.forEach(doc=>{ if(pending.has(doc.id)||!doc.exists) return; const data=JSON.parse(JSON.stringify(doc.data()));
+      if(doc.id==="profile") profile=normProfile(data); else if(doc.id.startsWith("d-")) days[doc.id.slice(2)]=data });
+    lsSave(); fillSettings(); render(); say(idleLine(),true);
+    if(!snap.metadata.fromCache&&!pending.size) setSync("Saved to your account · syncs across devices");
+  },()=>{clearTimeout(timer); coll=null; setSync("Saved on this device")});
+})();
+})();
+</script>
+
+</body>
+</html>
